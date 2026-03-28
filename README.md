@@ -16,11 +16,11 @@ A small **customer relationship management (CRM)** web application built with **
 
 ## Prerequisites
 
-| Requirement | Notes |
-|-------------|--------|
-| **[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** | Required to build and run the app. Verify with `dotnet --version` (8.x). |
-| **[Docker](https://docs.docker.com/get-docker/)** & **Docker Compose** | Used to run SQL Server 2022 locally. Optional if you already have SQL Server and a matching database. |
-| **SQL Server** | Default setup expects **localhost:1433**, database **SampleCRMDB**, login **sa** (see [appsettings.json](appsettings.json) and [docker-compose.yml](docker-compose.yml)). |
+| Requirement                                                            | Notes                                                                                                                                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)**     | Required to build and run the app. Verify with `dotnet --version` (8.x).                                                                                                  |
+| **[Docker](https://docs.docker.com/get-docker/)** & **Docker Compose** | Used to run SQL Server 2022 locally. Optional if you already have SQL Server and a matching database.                                                                     |
+| **SQL Server**                                                         | Default setup expects **localhost:1433**, database **SampleCRMDB**, login **sa** (see [appsettings.json](appsettings.json) and [docker-compose.yml](docker-compose.yml)). |
 
 Optional:
 
@@ -42,10 +42,10 @@ Wait until the `mssql` service is healthy. The `mssql-init` service creates the 
 
 **Default SQL credentials (development only):**
 
-- **User:** `sa`  
-- **Password:** `SampleCRM_Sa1!`  
-- **Port:** `1433`  
-- **Database:** `SampleCRMDB`  
+- **User:** `sa`
+- **Password:** `SampleCRM_Sa1!`
+- **Port:** `1433`
+- **Database:** `SampleCRMDB`
 
 Change these in production and update `ConnectionStrings:DefaultConnection` accordingly.
 
@@ -60,17 +60,17 @@ Or open the project in Visual Studio / Rider / VS Code and run the **https** or 
 
 **Typical URLs** (see [Properties/launchSettings.json](Properties/launchSettings.json)):
 
-- HTTPS: `https://localhost:7273`  
-- HTTP: `http://localhost:5179`  
+- HTTPS: `https://localhost:7273`
+- HTTP: `http://localhost:5179`
 
 ### 3. Sign in
 
 On first run, the app applies EF Core **migrations** and seeds a default admin if no users exist:
 
-| Field | Value |
-|--------|--------|
-| **Email** | `admin@samplecrm.local` |
-| **Password** | `Admin123!` |
+| Field        | Value                   |
+| ------------ | ----------------------- |
+| **Email**    | `admin@samplecrm.local` |
+| **Password** | `Admin123!`             |
 
 Use **Admin → Users** (admin only) to create more accounts (`Admin` or `Agent`).
 
@@ -78,8 +78,8 @@ Use **Admin → Users** (admin only) to create more accounts (`Admin` or `Agent`
 
 ## Configuration
 
-- **Connection string:** `ConnectionStrings:DefaultConnection` in [appsettings.json](appsettings.json) and [appsettings.Development.json](appsettings.Development.json).  
-- **Cookie name / session:** Configured in [Program.cs](Program.cs) (`SampleCRM.Auth`, sliding 8-hour expiration).  
+- **Connection string:** `ConnectionStrings:DefaultConnection` in [appsettings.json](appsettings.json) and [appsettings.Development.json](appsettings.Development.json).
+- **Cookie name / session:** Configured in [Program.cs](Program.cs) (`SampleCRM.Auth`, sliding 8-hour expiration).
 - **Authorization:** A fallback policy requires an authenticated user; [Login](Components/Pages/Account/Login.razor) and [Error](Components/Pages/Error.razor) allow anonymous access.
 
 For secrets in real deployments, prefer **User Secrets**, **environment variables**, or a secret store—not committed JSON files.
@@ -170,74 +170,11 @@ erDiagram
     }
 ```
 
-### Tables (column summary)
-
-| Table | Column | SQL type (effective) | Notes |
-|--------|--------|----------------------|--------|
-| **Customers** | `CustomerId` | `uniqueidentifier` | PK |
-| | `FirstName`, `LastName` | `nvarchar(100)` | Required |
-| | `Email` | `nvarchar(320)` | Required |
-| | `Phone` | `nvarchar(50)` | |
-| | `CompanyName` | `nvarchar(200)` | |
-| | `CreatedAt`, `UpdatedAt` | `datetime2` | UTC in app |
-| **Users** | `UserId` | `uniqueidentifier` | PK |
-| | `Name` | `nvarchar(200)` | Required |
-| | `Email` | `nvarchar(320)` | Required, **unique** index |
-| | `Role` | `nvarchar(50)` | e.g. `Admin`, `Agent` |
-| | `Active` | `bit` | |
-| | `CreatedAt` | `datetime2` | |
-| | `PasswordHash` | `nvarchar(500)` | PBKDF2 hash only |
-| **Opportunities** | `OpportunityId` | `uniqueidentifier` | PK |
-| | `CustomerId` | `uniqueidentifier` | FK → Customers, **Restrict** delete |
-| | `Title` | `nvarchar(200)` | |
-| | `Status` | `nvarchar(50)` | |
-| | `ExpectedValue` | `decimal(18,2)` | |
-| | `CloseDate` | `date` | Nullable |
-| | `AssignedRepId` | `uniqueidentifier` | FK → Users, nullable, **SetNull** on delete |
-| | `CreatedAt`, `UpdatedAt` | `datetime2` | |
-| **Interactions** | `InteractionId` | `uniqueidentifier` | PK |
-| | `CustomerId` | `uniqueidentifier` | FK → Customers, **Restrict** |
-| | `OpportunityId` | `uniqueidentifier` | FK → Opportunities, nullable, **SetNull** |
-| | `UserId` | `uniqueidentifier` | FK → Users, **Restrict** |
-| | `Type` | `nvarchar(50)` | |
-| | `Subject` | `nvarchar(300)` | |
-| | `Details` | `nvarchar(4000)` | |
-| | `Timestamp` | `datetime2` | |
-| **SupportTickets** | `TicketId` | `uniqueidentifier` | PK |
-| | `CustomerId` | `uniqueidentifier` | FK → Customers, **Restrict** |
-| | `Subject` | `nvarchar(300)` | |
-| | `Description` | `nvarchar(4000)` | |
-| | `Status` | `nvarchar(50)` | |
-| | `Priority` | `nvarchar(50)` | |
-| | `AssignedAgentId` | `uniqueidentifier` | FK → Users, nullable, **SetNull** |
-| | `CreatedAt`, `UpdatedAt`, `ClosedAt` | `datetime2` | `ClosedAt` nullable |
-| **TicketResponses** | `ResponseId` | `uniqueidentifier` | PK |
-| | `TicketId` | `uniqueidentifier` | FK → SupportTickets, **Cascade** delete |
-| | `UserId` | `uniqueidentifier` | FK → Users, **Restrict** |
-| | `Message` | `nvarchar(4000)` | |
-| | `Timestamp` | `datetime2` | |
-
-### Foreign keys and delete behavior
-
-| From | To | On delete |
-|------|-----|-----------|
-| Opportunities.CustomerId | Customers | Restrict |
-| Opportunities.AssignedRepId | Users | Set null |
-| Interactions.CustomerId | Customers | Restrict |
-| Interactions.OpportunityId | Opportunities | Set null |
-| Interactions.UserId | Users | Restrict |
-| SupportTickets.CustomerId | Customers | Restrict |
-| SupportTickets.AssignedAgentId | Users | Set null |
-| TicketResponses.TicketId | SupportTickets | Cascade |
-| TicketResponses.UserId | Users | Restrict |
-
----
-
 ## Database and EF Core
 
-- **Context:** `ApplicationDbContext` in [Data/ApplicationDbContext.cs](Data/ApplicationDbContext.cs).  
-- **Entities:** [Data/Entities/](Data/Entities/) (`Customer`, `User`, `Opportunity`, `Interaction`, `SupportTicket`, `TicketResponse`).  
-- **Migrations:** [Data/Migrations/](Data/Migrations/).  
+- **Context:** `ApplicationDbContext` in [Data/ApplicationDbContext.cs](Data/ApplicationDbContext.cs).
+- **Entities:** [Data/Entities/](Data/Entities/) (`Customer`, `User`, `Opportunity`, `Interaction`, `SupportTicket`, `TicketResponse`).
+- **Migrations:** [Data/Migrations/](Data/Migrations/).
 - **Startup:** [DbInitializer](Data/DbInitializer.cs) runs `MigrateAsync()` then seeds the admin user when the database is empty.
 
 ### Add a new migration (optional)
@@ -273,20 +210,20 @@ SampleCRMApp/
 
 ## Security notes (important)
 
-- Default SQL and app passwords are for **local development only**.  
-- Login uses **anti-forgery tokens**; MVC is registered with `AddControllersWithViews()` so `[ValidateAntiForgeryToken]` works on `AccountController`.  
+- Default SQL and app passwords are for **local development only**.
+- Login uses **anti-forgery tokens**; MVC is registered with `AddControllersWithViews()` so `[ValidateAntiForgeryToken]` works on `AccountController`.
 - **HTTPS** is recommended; the dev profile enables both HTTP and HTTPS.
 
 ---
 
 ## Troubleshooting
 
-| Issue | What to check |
-|--------|----------------|
-| Cannot connect to SQL | Docker is running, `docker compose ps`, port **1433** not used by another instance, firewall. |
-| Login / antiforgery errors | Ensure you are on a current build; controllers use `AddControllersWithViews()`. |
-| Empty database / no tables | Run the app once so `DbInitializer` runs migrations; check Docker logs for SQL errors. |
-| Wrong URL | Match `launchSettings.json` or the URL printed in the console when you `dotnet run`. |
+| Issue                      | What to check                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| Cannot connect to SQL      | Docker is running, `docker compose ps`, port **1433** not used by another instance, firewall. |
+| Login / antiforgery errors | Ensure you are on a current build; controllers use `AddControllersWithViews()`.               |
+| Empty database / no tables | Run the app once so `DbInitializer` runs migrations; check Docker logs for SQL errors.        |
+| Wrong URL                  | Match `launchSettings.json` or the URL printed in the console when you `dotnet run`.          |
 
 ---
 
