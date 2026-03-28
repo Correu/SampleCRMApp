@@ -86,6 +86,153 @@ For secrets in real deployments, prefer **User Secrets**, **environment variable
 
 ---
 
+## Database schema
+
+The app uses **SQL Server** with database **SampleCRMDB**. Tables and columns are created by **EF Core migrations**; names and types below match the model in [Data/ApplicationDbContext.cs](Data/ApplicationDbContext.cs) and [Data/Entities/](Data/Entities/).
+
+### Entity relationship overview
+
+```mermaid
+erDiagram
+    Customers ||--o{ Opportunities : has
+    Customers ||--o{ Interactions : has
+    Customers ||--o{ SupportTickets : has
+    Users ||--o{ Interactions : creates
+    Users ||--o{ Opportunities : assigned_to
+    Users ||--o{ SupportTickets : assigned_to
+    Users ||--o{ TicketResponses : creates
+    Opportunities ||--o{ Interactions : has
+    SupportTickets ||--o{ TicketResponses : has
+
+    Customers {
+        uniqueidentifier CustomerId PK
+        nvarchar FirstName
+        nvarchar LastName
+        nvarchar Email
+        nvarchar Phone
+        nvarchar CompanyName
+        datetime2 CreatedAt
+        datetime2 UpdatedAt
+    }
+
+    Users {
+        uniqueidentifier UserId PK
+        nvarchar Name
+        nvarchar Email
+        nvarchar Role
+        bit Active
+        datetime2 CreatedAt
+        nvarchar PasswordHash
+    }
+
+    Opportunities {
+        uniqueidentifier OpportunityId PK
+        uniqueidentifier CustomerId FK
+        nvarchar Title
+        nvarchar Status
+        decimal ExpectedValue
+        date CloseDate
+        uniqueidentifier AssignedRepId FK
+        datetime2 CreatedAt
+        datetime2 UpdatedAt
+    }
+
+    Interactions {
+        uniqueidentifier InteractionId PK
+        uniqueidentifier CustomerId FK
+        uniqueidentifier OpportunityId FK
+        uniqueidentifier UserId FK
+        nvarchar Type
+        nvarchar Subject
+        nvarchar Details
+        datetime2 Timestamp
+    }
+
+    SupportTickets {
+        uniqueidentifier TicketId PK
+        uniqueidentifier CustomerId FK
+        nvarchar Subject
+        nvarchar Description
+        nvarchar Status
+        nvarchar Priority
+        uniqueidentifier AssignedAgentId FK
+        datetime2 CreatedAt
+        datetime2 UpdatedAt
+        datetime2 ClosedAt
+    }
+
+    TicketResponses {
+        uniqueidentifier ResponseId PK
+        uniqueidentifier TicketId FK
+        uniqueidentifier UserId FK
+        nvarchar Message
+        datetime2 Timestamp
+    }
+```
+
+### Tables (column summary)
+
+| Table | Column | SQL type (effective) | Notes |
+|--------|--------|----------------------|--------|
+| **Customers** | `CustomerId` | `uniqueidentifier` | PK |
+| | `FirstName`, `LastName` | `nvarchar(100)` | Required |
+| | `Email` | `nvarchar(320)` | Required |
+| | `Phone` | `nvarchar(50)` | |
+| | `CompanyName` | `nvarchar(200)` | |
+| | `CreatedAt`, `UpdatedAt` | `datetime2` | UTC in app |
+| **Users** | `UserId` | `uniqueidentifier` | PK |
+| | `Name` | `nvarchar(200)` | Required |
+| | `Email` | `nvarchar(320)` | Required, **unique** index |
+| | `Role` | `nvarchar(50)` | e.g. `Admin`, `Agent` |
+| | `Active` | `bit` | |
+| | `CreatedAt` | `datetime2` | |
+| | `PasswordHash` | `nvarchar(500)` | PBKDF2 hash only |
+| **Opportunities** | `OpportunityId` | `uniqueidentifier` | PK |
+| | `CustomerId` | `uniqueidentifier` | FK → Customers, **Restrict** delete |
+| | `Title` | `nvarchar(200)` | |
+| | `Status` | `nvarchar(50)` | |
+| | `ExpectedValue` | `decimal(18,2)` | |
+| | `CloseDate` | `date` | Nullable |
+| | `AssignedRepId` | `uniqueidentifier` | FK → Users, nullable, **SetNull** on delete |
+| | `CreatedAt`, `UpdatedAt` | `datetime2` | |
+| **Interactions** | `InteractionId` | `uniqueidentifier` | PK |
+| | `CustomerId` | `uniqueidentifier` | FK → Customers, **Restrict** |
+| | `OpportunityId` | `uniqueidentifier` | FK → Opportunities, nullable, **SetNull** |
+| | `UserId` | `uniqueidentifier` | FK → Users, **Restrict** |
+| | `Type` | `nvarchar(50)` | |
+| | `Subject` | `nvarchar(300)` | |
+| | `Details` | `nvarchar(4000)` | |
+| | `Timestamp` | `datetime2` | |
+| **SupportTickets** | `TicketId` | `uniqueidentifier` | PK |
+| | `CustomerId` | `uniqueidentifier` | FK → Customers, **Restrict** |
+| | `Subject` | `nvarchar(300)` | |
+| | `Description` | `nvarchar(4000)` | |
+| | `Status` | `nvarchar(50)` | |
+| | `Priority` | `nvarchar(50)` | |
+| | `AssignedAgentId` | `uniqueidentifier` | FK → Users, nullable, **SetNull** |
+| | `CreatedAt`, `UpdatedAt`, `ClosedAt` | `datetime2` | `ClosedAt` nullable |
+| **TicketResponses** | `ResponseId` | `uniqueidentifier` | PK |
+| | `TicketId` | `uniqueidentifier` | FK → SupportTickets, **Cascade** delete |
+| | `UserId` | `uniqueidentifier` | FK → Users, **Restrict** |
+| | `Message` | `nvarchar(4000)` | |
+| | `Timestamp` | `datetime2` | |
+
+### Foreign keys and delete behavior
+
+| From | To | On delete |
+|------|-----|-----------|
+| Opportunities.CustomerId | Customers | Restrict |
+| Opportunities.AssignedRepId | Users | Set null |
+| Interactions.CustomerId | Customers | Restrict |
+| Interactions.OpportunityId | Opportunities | Set null |
+| Interactions.UserId | Users | Restrict |
+| SupportTickets.CustomerId | Customers | Restrict |
+| SupportTickets.AssignedAgentId | Users | Set null |
+| TicketResponses.TicketId | SupportTickets | Cascade |
+| TicketResponses.UserId | Users | Restrict |
+
+---
+
 ## Database and EF Core
 
 - **Context:** `ApplicationDbContext` in [Data/ApplicationDbContext.cs](Data/ApplicationDbContext.cs).  
