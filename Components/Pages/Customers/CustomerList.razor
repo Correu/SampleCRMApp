@@ -1,0 +1,78 @@
+@page "/customers"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+
+<PageTitle>Customers</PageTitle>
+
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <h1 class="mb-0 me-auto">Customers</h1>
+    <a class="btn btn-primary" href="customers/create">New customer</a>
+</div>
+
+<div class="mb-3">
+    <input type="search" class="form-control" style="max-width:24rem" placeholder="Search name, company, email…"
+           @bind="_search" @bind:event="oninput" @bind:after="FilterAsync" />
+</div>
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var c in _items)
+            {
+                <tr>
+                    <td>@c.FirstName @c.LastName</td>
+                    <td>@c.CompanyName</td>
+                    <td>@c.Email</td>
+                    <td>@c.Phone</td>
+                    <td><a href="customers/@c.CustomerId">View</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    @if (!_items.Any())
+    {
+        <p class="text-muted">No customers match your search.</p>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private string _search = "";
+    private List<Customer> _items = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task FilterAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var q = Db.Customers.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var s = _search.Trim();
+            q = q.Where(c =>
+                c.FirstName.Contains(s) || c.LastName.Contains(s) || c.CompanyName.Contains(s) ||
+                c.Email.Contains(s));
+        }
+
+        _items = await q.OrderBy(c => c.LastName).ThenBy(c => c.FirstName).ToListAsync();
+        _loading = false;
+    }
+}

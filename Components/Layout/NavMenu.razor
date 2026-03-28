@@ -1,0 +1,64 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Sample CRM</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <AuthorizeView Context="navAuth">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="customers">
+                        <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Customers
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="opportunities">
+                        <span class="bi bi-graph-up-nav-menu" aria-hidden="true"></span> Opportunities
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="interactions">
+                        <span class="bi bi-chat-dots-nav-menu" aria-hidden="true"></span> Interactions
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="tickets">
+                        <span class="bi bi-ticket-perforated-nav-menu" aria-hidden="true"></span> Support
+                    </NavLink>
+                </div>
+                <AuthorizeView Policy="AdminOnly" Context="adminNav">
+                    <Authorized>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="admin/users">
+                            <span class="bi bi-shield-lock-nav-menu" aria-hidden="true"></span> Users
+                        </NavLink>
+                    </div>
+                    </Authorized>
+                </AuthorizeView>
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+</div>
+
+@code {
+    protected override void OnInitialized() =>
+        Navigation.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        StateHasChanged();
+
+    public void Dispose() =>
+        Navigation.LocationChanged -= OnLocationChanged;
+}

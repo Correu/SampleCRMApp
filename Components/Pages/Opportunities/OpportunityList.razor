@@ -1,0 +1,118 @@
+@page "/opportunities"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+
+<PageTitle>Opportunities</PageTitle>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <h1 class="mb-0 me-auto">Opportunities</h1>
+    <a class="btn btn-primary" href="opportunities/create">New</a>
+</div>
+
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+    <label class="mb-0">Status</label>
+    <select class="form-select" style="width:auto" @bind="_statusFilter" @bind:after="LoadAsync">
+        <option value="">All</option>
+        @foreach (var s in _statuses)
+        {
+            <option value="@s">@s</option>
+        }
+    </select>
+</div>
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+            <tr>
+                <th>Title</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Value</th>
+                <th>Close</th>
+                <th>Rep</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in _rows)
+            {
+                <tr>
+                    <td>@row.Title</td>
+                    <td><a href="customers/@row.CustomerId">@row.CustomerName</a></td>
+                    <td>@row.Status</td>
+                    <td>@row.ExpectedValue.ToString("C")</td>
+                    <td>@(row.CloseDate?.ToString("d") ?? "—")</td>
+                    <td>@row.RepName</td>
+                    <td><a href="opportunities/@row.OpportunityId/edit">Edit</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string _statusFilter = "";
+    private readonly string[] _statuses = ["Prospecting", "Qualification", "Proposal", "Negotiation", "Won", "Lost"];
+    private List<OppRow> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var baseQuery =
+            from o in Db.Opportunities.AsNoTracking()
+            join c in Db.Customers.AsNoTracking() on o.CustomerId equals c.CustomerId
+            join u in Db.Users.AsNoTracking() on o.AssignedRepId equals u.UserId into uj
+            from u in uj.DefaultIfEmpty()
+            select new
+            {
+                o.OpportunityId,
+                o.CustomerId,
+                CustomerName = c.CompanyName != "" ? c.CompanyName : c.FirstName + " " + c.LastName,
+                o.Title,
+                o.Status,
+                o.ExpectedValue,
+                o.CloseDate,
+                o.UpdatedAt,
+                RepName = u != null ? u.Name : "—",
+            };
+
+        if (!string.IsNullOrEmpty(_statusFilter))
+            baseQuery = baseQuery.Where(x => x.Status == _statusFilter);
+
+        var list = await baseQuery
+            .OrderByDescending(x => x.UpdatedAt)
+            .Select(x => new OppRow(
+                x.OpportunityId,
+                x.CustomerId,
+                x.CustomerName,
+                x.Title,
+                x.Status,
+                x.ExpectedValue,
+                x.CloseDate,
+                x.RepName))
+            .ToListAsync();
+
+        _rows = list;
+        _loading = false;
+    }
+
+    private record OppRow(
+        Guid OpportunityId,
+        Guid CustomerId,
+        string CustomerName,
+        string Title,
+        string Status,
+        decimal ExpectedValue,
+        DateOnly? CloseDate,
+        string RepName);
+}

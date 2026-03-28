@@ -1,0 +1,142 @@
+@page "/tickets/create"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+
+<PageTitle>New ticket</PageTitle>
+
+<h1 class="mb-4">New support ticket</h1>
+
+<EditForm Model="_model" OnValidSubmit="SaveAsync">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" />
+    <div class="row g-3" style="max-width:40rem">
+        <div class="col-12">
+            <label class="form-label">Customer</label>
+            <InputSelect class="form-select" @bind-Value="_model.CustomerIdString">
+                @foreach (var c in _customers)
+                {
+                    <option value="@c.CustomerId">@c.Label</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="col-12">
+            <label class="form-label">Subject</label>
+            <InputText class="form-control" @bind-Value="_model.Subject" />
+        </div>
+        <div class="col-12">
+            <label class="form-label">Description</label>
+            <InputTextArea class="form-control" rows="4" @bind-Value="_model.Description" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Status</label>
+            <InputSelect class="form-select" @bind-Value="_model.Status">
+                @foreach (var s in _statuses)
+                {
+                    <option value="@s">@s</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Priority</label>
+            <InputSelect class="form-select" @bind-Value="_model.Priority">
+                @foreach (var p in _priorities)
+                {
+                    <option value="@p">@p</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="col-12">
+            <label class="form-label">Assigned agent</label>
+            <InputSelect class="form-select" @bind-Value="_model.AssignedAgentIdString">
+                <option value="">—</option>
+                @foreach (var u in _users)
+                {
+                    <option value="@u.UserId">@u.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Create</button>
+            <a class="btn btn-outline-secondary" href="tickets">Cancel</a>
+        </div>
+    </div>
+</EditForm>
+
+@code {
+    [SupplyParameterFromQuery(Name = "customerId")]
+    public Guid? CustomerIdQuery { get; set; }
+
+    private List<CustomerOption> _customers = new();
+    private List<UserOption> _users = new();
+    private readonly string[] _statuses = ["New", "Open", "Pending", "Resolved", "Closed"];
+    private readonly string[] _priorities = ["Low", "Medium", "High", "Critical"];
+    private TicketForm _model = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _customers = await Db.Customers.AsNoTracking()
+            .OrderBy(c => c.CompanyName).ThenBy(c => c.LastName)
+            .Select(c => new CustomerOption(c.CustomerId, c.CompanyName != "" ? c.CompanyName : c.FirstName + " " + c.LastName))
+            .ToListAsync();
+
+        _users = await Db.Users.AsNoTracking().Where(u => u.Active)
+            .OrderBy(u => u.Name)
+            .Select(u => new UserOption(u.UserId, u.Name))
+            .ToListAsync();
+
+        var pre = CustomerIdQuery ?? _customers.FirstOrDefault()?.CustomerId ?? Guid.Empty;
+        _model = new TicketForm
+        {
+            CustomerIdString = pre == Guid.Empty ? "" : pre.ToString(),
+            Status = "New",
+            Priority = "Medium",
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!Guid.TryParse(_model.CustomerIdString, out var customerId))
+            return;
+
+        Guid? agent = string.IsNullOrEmpty(_model.AssignedAgentIdString)
+            ? null
+            : Guid.Parse(_model.AssignedAgentIdString);
+
+        var now = DateTime.UtcNow;
+        var t = new SupportTicket
+        {
+            TicketId = Guid.NewGuid(),
+            CustomerId = customerId,
+            Subject = _model.Subject.Trim(),
+            Description = _model.Description.Trim(),
+            Status = _model.Status,
+            Priority = _model.Priority,
+            AssignedAgentId = agent,
+            CreatedAt = now,
+            UpdatedAt = now,
+            ClosedAt = _model.Status == "Closed" ? now : null,
+        };
+        Db.SupportTickets.Add(t);
+        await Db.SaveChangesAsync();
+        Nav.NavigateTo($"/tickets/{t.TicketId}");
+    }
+
+    private sealed record CustomerOption(Guid CustomerId, string Label);
+    private sealed record UserOption(Guid UserId, string Name);
+
+    private sealed class TicketForm
+    {
+        public string CustomerIdString { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string Subject { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.StringLength(4000)]
+        public string Description { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Status { get; set; } = "New";
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Priority { get; set; } = "Medium";
+        public string AssignedAgentIdString { get; set; } = "";
+    }
+}

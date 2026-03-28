@@ -1,0 +1,56 @@
+@page "/account/login"
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Antiforgery
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Sign in</PageTitle>
+
+<div class="crm-narrow">
+    <h1 class="mb-4">Sign in</h1>
+
+    @if (ShowError)
+    {
+        <div class="alert alert-danger">Invalid email or password.</div>
+    }
+
+    <form method="post" action="/account/do-login" class="card card-body shadow-sm">
+        @if (Tokens is not null)
+        {
+            <input type="hidden" name="@Tokens.FormFieldName" value="@Tokens.RequestToken" />
+        }
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input name="email" type="email" class="form-control" required autocomplete="username" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input name="password" type="password" class="form-control" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+
+    <p class="text-muted small mt-3 mb-0">
+        Development account: <code>admin@samplecrm.local</code> / <code>Admin123!</code>
+    </p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    private AntiforgeryTokenSet? Tokens { get; set; }
+
+    private bool ShowError => Error is not null;
+
+    protected override void OnInitialized()
+    {
+        var httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext is not null)
+            Tokens = Antiforgery.GetAndStoreTokens(httpContext);
+    }
+}

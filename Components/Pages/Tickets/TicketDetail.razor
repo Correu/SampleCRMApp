@@ -1,0 +1,259 @@
+@page "/tickets/{TicketId:guid}"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+@inject IUserContext UserContext
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Ticket</PageTitle>
+
+@if (_ticket is null && !_missing)
+{
+    <p>Loading…</p>
+}
+else if (_missing)
+{
+    <p class="text-danger">Ticket not found.</p>
+    <a href="tickets">Back</a>
+}
+else
+{
+    var t = _ticket!;
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <h1 class="mb-0 me-auto">@t.Subject</h1>
+        <a class="btn btn-outline-secondary" href="tickets">All tickets</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h6 text-muted mb-2">Details</h2>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Customer</dt>
+                        <dd class="col-sm-9"><a href="customers/@t.CustomerId">@_customerLabel</a></dd>
+                        <dt class="col-sm-3">Status</dt>
+                        <dd class="col-sm-9">@t.Status</dd>
+                        <dt class="col-sm-3">Priority</dt>
+                        <dd class="col-sm-9">@t.Priority</dd>
+                        <dt class="col-sm-3">Agent</dt>
+                        <dd class="col-sm-9">@_agentName</dd>
+                        <dt class="col-sm-3">Created</dt>
+                        <dd class="col-sm-9">@t.CreatedAt.ToLocalTime():g</dd>
+                        <dt class="col-sm-3">Updated</dt>
+                        <dd class="col-sm-9">@t.UpdatedAt.ToLocalTime():g</dd>
+                        <dt class="col-sm-3">Closed</dt>
+                        <dd class="col-sm-9">@(t.ClosedAt?.ToLocalTime().ToString("g") ?? "—")</dd>
+                    </dl>
+                    <p class="mb-0 mt-3">@t.Description</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h6 mb-3">Responses</h2>
+                    @if (!_responses.Any())
+                    {
+                        <p class="text-muted mb-0">No responses yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var r in _responses)
+                            {
+                                <li class="border-bottom pb-3 mb-3">
+                                    <div class="small text-muted">@r.Timestamp.ToLocalTime():g · @r.UserName</div>
+                                    <div>@r.Message</div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h6 mb-3">Update ticket</h2>
+                    <EditForm Model="_editModel" OnValidSubmit="SaveTicketAsync">
+                        <div class="mb-2">
+                            <label class="form-label">Status</label>
+                            <InputSelect class="form-select" @bind-Value="_editModel.Status">
+                                @foreach (var s in _statuses)
+                                {
+                                    <option value="@s">@s</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <AuthorizeView Policy="AdminOnly" Context="assignCtx">
+                            <Authorized>
+                                <div class="mb-2">
+                                    <label class="form-label">Assigned agent</label>
+                                    <InputSelect class="form-select" @bind-Value="_editModel.AssignedAgentIdString">
+                                        <option value="">—</option>
+                                        @foreach (var u in _users)
+                                        {
+                                            <option value="@u.UserId">@u.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </Authorized>
+                            <NotAuthorized>
+                                <div class="mb-2 small text-muted">Assignment can be changed by an administrator.</div>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                        <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+                    </EditForm>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h6 mb-3">Add response</h2>
+                    @if (_currentUserId is null)
+                    {
+                        <p class="text-danger small mb-0">Cannot resolve user.</p>
+                    }
+                    else
+                    {
+                        <EditForm Model="_responseModel" OnValidSubmit="AddResponseAsync">
+                            <InputTextArea class="form-control mb-2" rows="4" @bind-Value="_responseModel.Message" placeholder="Message" />
+                            <button type="submit" class="btn btn-primary btn-sm">Post</button>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid TicketId { get; set; }
+
+    private SupportTicket? _ticket;
+    private bool _missing;
+    private string _customerLabel = "";
+    private string _agentName = "—";
+    private List<RespRow> _responses = new();
+    private List<UserOption> _users = new();
+    private Guid? _currentUserId;
+
+    private readonly string[] _statuses = ["New", "Open", "Pending", "Resolved", "Closed"];
+
+    private TicketEditForm _editModel = new();
+    private ResponseForm _responseModel = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _currentUserId = await UserContext.GetUserIdAsync();
+
+        _users = await Db.Users.AsNoTracking().Where(u => u.Active)
+            .OrderBy(u => u.Name)
+            .Select(u => new UserOption(u.UserId, u.Name))
+            .ToListAsync();
+
+        _ticket = await Db.SupportTickets.FirstOrDefaultAsync(t => t.TicketId == TicketId);
+        if (_ticket is null)
+        {
+            _missing = true;
+            return;
+        }
+
+        var c = await Db.Customers.AsNoTracking().FirstAsync(x => x.CustomerId == _ticket.CustomerId);
+        _customerLabel = c.CompanyName != "" ? c.CompanyName : c.FirstName + " " + c.LastName;
+
+        if (_ticket.AssignedAgentId is Guid aid)
+        {
+            var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == aid);
+            _agentName = u?.Name ?? "—";
+        }
+        else
+            _agentName = "—";
+
+        _editModel = new TicketEditForm
+        {
+            Status = _ticket.Status,
+            AssignedAgentIdString = _ticket.AssignedAgentId?.ToString() ?? "",
+        };
+
+        _responses = await (
+                from r in Db.TicketResponses.AsNoTracking()
+                join u in Db.Users.AsNoTracking() on r.UserId equals u.UserId
+                where r.TicketId == TicketId
+                orderby r.Timestamp
+                select new RespRow(r.Message, r.Timestamp, u.Name))
+            .ToListAsync();
+    }
+
+    private bool IsAdmin =>
+        HttpContextAccessor.HttpContext?.User.IsInRole(AppRoles.Admin) == true;
+
+    private async Task SaveTicketAsync()
+    {
+        if (_ticket is null) return;
+
+        var now = DateTime.UtcNow;
+        _ticket.Status = _editModel.Status;
+        _ticket.UpdatedAt = now;
+
+        if (_ticket.Status == "Closed" && _ticket.ClosedAt is null)
+            _ticket.ClosedAt = now;
+        if (_ticket.Status != "Closed")
+            _ticket.ClosedAt = null;
+
+        if (IsAdmin)
+        {
+            _ticket.AssignedAgentId = string.IsNullOrEmpty(_editModel.AssignedAgentIdString)
+                ? null
+                : Guid.Parse(_editModel.AssignedAgentIdString);
+        }
+
+        await Db.SaveChangesAsync();
+
+        _ticket = await Db.SupportTickets.FirstAsync(t => t.TicketId == TicketId);
+        if (_ticket.AssignedAgentId is Guid aid2)
+        {
+            var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == aid2);
+            _agentName = u?.Name ?? "—";
+        }
+        else
+            _agentName = "—";
+    }
+
+    private async Task AddResponseAsync()
+    {
+        if (_ticket is null || _currentUserId is null || string.IsNullOrWhiteSpace(_responseModel.Message))
+            return;
+
+        var r = new TicketResponse
+        {
+            ResponseId = Guid.NewGuid(),
+            TicketId = _ticket.TicketId,
+            UserId = _currentUserId.Value,
+            Message = _responseModel.Message.Trim(),
+            Timestamp = DateTime.UtcNow,
+        };
+        Db.TicketResponses.Add(r);
+        _ticket.UpdatedAt = r.Timestamp;
+        await Db.SaveChangesAsync();
+
+        _responseModel = new ResponseForm();
+        var u = await Db.Users.AsNoTracking().FirstAsync(x => x.UserId == _currentUserId.Value);
+        _responses.Add(new RespRow(r.Message, r.Timestamp, u.Name));
+    }
+
+    private sealed record UserOption(Guid UserId, string Name);
+    private sealed record RespRow(string Message, DateTime Timestamp, string UserName);
+
+    private sealed class TicketEditForm
+    {
+        public string Status { get; set; } = "";
+        public string AssignedAgentIdString { get; set; } = "";
+    }
+
+    private sealed class ResponseForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Message { get; set; } = "";
+    }
+}

@@ -1,0 +1,135 @@
+@page "/customers/create"
+@page "/customers/{CustomerId:guid}/edit"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+
+<PageTitle>@(_isCreate ? "New customer" : "Edit customer")</PageTitle>
+
+<h1 class="mb-4">@(_isCreate ? "New customer" : "Edit customer")</h1>
+
+@if (!_isCreate && _editing is null)
+{
+    <p class="text-danger">Not found.</p>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+
+        <div class="row g-3" style="max-width:40rem">
+            <div class="col-md-6">
+                <label class="form-label">First name</label>
+                <InputText class="form-control" @bind-Value="_model.FirstName" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Last name</label>
+                <InputText class="form-control" @bind-Value="_model.LastName" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Email</label>
+                <InputText type="email" class="form-control" @bind-Value="_model.Email" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Phone</label>
+                <InputText class="form-control" @bind-Value="_model.Phone" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Company</label>
+                <InputText class="form-control" @bind-Value="_model.CompanyName" />
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a class="btn btn-outline-secondary" href="@CancelHref">Cancel</a>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid? CustomerId { get; set; }
+
+    private bool _isCreate => CustomerId is null || CustomerId == Guid.Empty;
+    private Customer? _editing;
+    private CustomerForm _model = new();
+
+    private string CancelHref =>
+        _isCreate ? "customers" : $"customers/{CustomerId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_isCreate)
+        {
+            _model = new CustomerForm();
+            _editing = new Customer();
+            return;
+        }
+
+        _editing = await Db.Customers.FirstOrDefaultAsync(c => c.CustomerId == CustomerId);
+        if (_editing is null) return;
+        _model = new CustomerForm
+        {
+            FirstName = _editing.FirstName,
+            LastName = _editing.LastName,
+            Email = _editing.Email,
+            Phone = _editing.Phone,
+            CompanyName = _editing.CompanyName,
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        var now = DateTime.UtcNow;
+        if (_isCreate)
+        {
+            var c = new Customer
+            {
+                CustomerId = Guid.NewGuid(),
+                FirstName = _model.FirstName.Trim(),
+                LastName = _model.LastName.Trim(),
+                Email = _model.Email.Trim(),
+                Phone = _model.Phone.Trim(),
+                CompanyName = _model.CompanyName.Trim(),
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            Db.Customers.Add(c);
+            await Db.SaveChangesAsync();
+            Nav.NavigateTo($"/customers/{c.CustomerId}");
+            return;
+        }
+
+        if (_editing is null) return;
+        _editing.FirstName = _model.FirstName.Trim();
+        _editing.LastName = _model.LastName.Trim();
+        _editing.Email = _model.Email.Trim();
+        _editing.Phone = _model.Phone.Trim();
+        _editing.CompanyName = _model.CompanyName.Trim();
+        _editing.UpdatedAt = now;
+        await Db.SaveChangesAsync();
+        Nav.NavigateTo($"/customers/{_editing.CustomerId}");
+    }
+
+    private sealed class CustomerForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(100)]
+        public string FirstName { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(100)]
+        public string LastName { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        [System.ComponentModel.DataAnnotations.StringLength(320)]
+        public string Email { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.StringLength(50)]
+        public string Phone { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.StringLength(200)]
+        public string CompanyName { get; set; } = "";
+    }
+}

@@ -1,0 +1,82 @@
+@page "/customers/{CustomerId:guid}"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+
+<PageTitle>Customer</PageTitle>
+
+@if (_customer is null && !_missing)
+{
+    <p>Loading…</p>
+}
+else if (_missing)
+{
+    <p class="text-danger">Customer not found.</p>
+    <a href="customers">Back to list</a>
+}
+else
+{
+    var c = _customer!;
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <h1 class="mb-0 me-auto">@c.FirstName @c.LastName</h1>
+        <a class="btn btn-outline-secondary" href="customers">List</a>
+        <a class="btn btn-primary" href="customers/@c.CustomerId/edit">Edit</a>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <dl class="row">
+                <dt class="col-sm-4">Email</dt>
+                <dd class="col-sm-8">@c.Email</dd>
+                <dt class="col-sm-4">Phone</dt>
+                <dd class="col-sm-8">@c.Phone</dd>
+                <dt class="col-sm-4">Company</dt>
+                <dd class="col-sm-8">@c.CompanyName</dd>
+                <dt class="col-sm-4">Created</dt>
+                <dd class="col-sm-8">@c.CreatedAt.ToLocalTime():g</dd>
+                <dt class="col-sm-4">Updated</dt>
+                <dd class="col-sm-8">@c.UpdatedAt.ToLocalTime():g</dd>
+            </dl>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h6 text-muted">Related</h2>
+                    <p class="mb-1"><strong>@_oppCount</strong> opportunities</p>
+                    <p class="mb-1"><strong>@_interactionCount</strong> interactions</p>
+                    <p class="mb-0"><strong>@_ticketCount</strong> support tickets</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="mt-4">
+        <a href="@($"opportunities/create?customerId={c.CustomerId}")">New opportunity</a> ·
+        <a href="@($"interactions/create?customerId={c.CustomerId}")">Log interaction</a> ·
+        <a href="@($"tickets/create?customerId={c.CustomerId}")">New ticket</a>
+    </p>
+}
+
+@code {
+    [Parameter] public Guid CustomerId { get; set; }
+
+    private Customer? _customer;
+    private bool _missing;
+    private int _oppCount;
+    private int _interactionCount;
+    private int _ticketCount;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _missing = false;
+        _customer = await Db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.CustomerId == CustomerId);
+        if (_customer is null)
+        {
+            _missing = true;
+            return;
+        }
+
+        _oppCount = await Db.Opportunities.CountAsync(o => o.CustomerId == CustomerId);
+        _interactionCount = await Db.Interactions.CountAsync(i => i.CustomerId == CustomerId);
+        _ticketCount = await Db.SupportTickets.CountAsync(t => t.CustomerId == CustomerId);
+    }
+}

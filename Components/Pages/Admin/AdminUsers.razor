@@ -1,0 +1,136 @@
+@page "/admin/users"
+@attribute [Authorize(Policy = "AdminOnly")]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@inject ApplicationDbContext Db
+@inject IPasswordHasher<User> PasswordHasher
+
+<PageTitle>Users</PageTitle>
+
+<h1 class="mb-4">Users</h1>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h6 mb-3">Create user</h2>
+                <EditForm Model="_create" OnValidSubmit="CreateUserAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" />
+                    <div class="mb-2">
+                        <label class="form-label">Name</label>
+                        <InputText class="form-control" @bind-Value="_create.Name" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Email</label>
+                        <InputText type="email" class="form-control" @bind-Value="_create.Email" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Password</label>
+                        <InputText type="password" class="form-control" @bind-Value="_create.Password" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <InputSelect class="form-select" @bind-Value="_create.Role">
+                            <option value="@AppRoles.Agent">@AppRoles.Agent</option>
+                            <option value="@AppRoles.Admin">@AppRoles.Admin</option>
+                        </InputSelect>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </EditForm>
+                @if (!string.IsNullOrEmpty(_createMessage))
+                {
+                    <div class="alert alert-success mt-3 mb-0 small">@_createMessage</div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h6 mb-3">All users</h2>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Active</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var u in _users)
+                        {
+                            <tr>
+                                <td>@u.Name</td>
+                                <td>@u.Email</td>
+                                <td>@u.Role</td>
+                                <td>@(u.Active ? "Yes" : "No")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<User> _users = new();
+    private CreateModel _create = new();
+    private string? _createMessage;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _users = await Db.Users.AsNoTracking().OrderBy(u => u.Name).ToListAsync();
+    }
+
+    private async Task CreateUserAsync()
+    {
+        _createMessage = null;
+        var exists = await Db.Users.AnyAsync(u => u.Email == _create.Email.Trim());
+        if (exists)
+        {
+            _createMessage = "A user with that email already exists.";
+            return;
+        }
+
+        var user = new User
+        {
+            UserId = Guid.NewGuid(),
+            Name = _create.Name.Trim(),
+            Email = _create.Email.Trim(),
+            Role = _create.Role,
+            Active = true,
+            CreatedAt = DateTime.UtcNow,
+            PasswordHash = ""
+        };
+        user.PasswordHash = PasswordHasher.HashPassword(user, _create.Password);
+        Db.Users.Add(user);
+        await Db.SaveChangesAsync();
+        _create = new CreateModel { Role = AppRoles.Agent };
+        _createMessage = "User created.";
+        await ReloadAsync();
+    }
+
+    private sealed class CreateModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(200)]
+        public string Name { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string Password { get; set; } = "";
+
+        public string Role { get; set; } = AppRoles.Agent;
+    }
+}

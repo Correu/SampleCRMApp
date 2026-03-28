@@ -1,0 +1,222 @@
+@page "/interactions/create"
+@page "/interactions/{InteractionId:guid}/edit"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@inject IUserContext UserContext
+
+<PageTitle>@(_isCreate ? "Log interaction" : "Edit interaction")</PageTitle>
+
+<h1 class="mb-4">@(_isCreate ? "Log interaction" : "Edit interaction")</h1>
+
+@if (!_isCreate && _entity is null)
+{
+    <p class="text-danger">Not found.</p>
+}
+else if (_isCreate && !_userId.HasValue)
+{
+    <p class="text-danger">Unable to resolve current user.</p>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+        <div class="row g-3" style="max-width:40rem">
+            <div class="col-12">
+                <label class="form-label">Customer</label>
+                <InputSelect class="form-select" @bind-Value="_model.CustomerIdString" @bind:after="OnCustomerChangedAsync">
+                    @foreach (var c in _customers)
+                    {
+                        <option value="@c.CustomerId">@c.Label</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-12">
+                <label class="form-label">Opportunity (optional)</label>
+                <InputSelect class="form-select" @bind-Value="_model.OpportunityIdString">
+                    <option value="">—</option>
+                    @foreach (var o in _opportunitiesForCustomer)
+                    {
+                        <option value="@o.OpportunityId">@o.Title</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Type</label>
+                <InputSelect class="form-select" @bind-Value="_model.Type">
+                    @foreach (var t in _types)
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">When (local)</label>
+                <input type="datetime-local" class="form-control" value="@_timestampLocal" @onchange="OnTimestampChange" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Subject</label>
+                <InputText class="form-control" @bind-Value="_model.Subject" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Details</label>
+                <InputTextArea class="form-control" rows="4" @bind-Value="_model.Details" />
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a class="btn btn-outline-secondary" href="interactions">Cancel</a>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid? InteractionId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "customerId")]
+    public Guid? CustomerIdQuery { get; set; }
+
+    private bool _isCreate => !InteractionId.HasValue || InteractionId == Guid.Empty;
+    private Interaction? _entity;
+    private Guid? _userId;
+    private List<CustomerOption> _customers = new();
+    private List<OppOption> _opportunitiesForCustomer = new();
+    private readonly string[] _types = ["Call", "Email", "Meeting", "Note", "Other"];
+    private IntForm _model = new();
+    private string _timestampLocal = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _userId = await UserContext.GetUserIdAsync();
+
+        _customers = await Db.Customers.AsNoTracking()
+            .OrderBy(c => c.CompanyName).ThenBy(c => c.LastName)
+            .Select(c => new CustomerOption(c.CustomerId, c.CompanyName != "" ? c.CompanyName : c.FirstName + " " + c.LastName))
+            .ToListAsync();
+
+        if (_isCreate)
+        {
+            var preCustomer = CustomerIdQuery ?? _customers.FirstOrDefault()?.CustomerId ?? Guid.Empty;
+            _model = new IntForm
+            {
+                CustomerIdString = preCustomer == Guid.Empty ? "" : preCustomer.ToString(),
+                Type = "Call",
+            };
+            SyncTimestampLocal(DateTime.UtcNow);
+            await RefreshOpportunitiesAsync();
+            return;
+        }
+
+        _entity = await Db.Interactions.FirstOrDefaultAsync(i => i.InteractionId == InteractionId);
+        if (_entity is null) return;
+
+        _model = new IntForm
+        {
+            CustomerIdString = _entity.CustomerId.ToString(),
+            OpportunityIdString = _entity.OpportunityId?.ToString() ?? "",
+            Type = _entity.Type,
+            Subject = _entity.Subject,
+            Details = _entity.Details,
+        };
+        SyncTimestampLocal(_entity.Timestamp);
+        await RefreshOpportunitiesAsync();
+    }
+
+    private void SyncTimestampLocal(DateTime utc)
+    {
+        var local = utc.Kind == DateTimeKind.Utc ? utc.ToLocalTime() : utc.ToLocalTime();
+        _model.TimestampUtc = utc.Kind == DateTimeKind.Utc ? utc : utc.ToUniversalTime();
+        _timestampLocal = local.ToString("yyyy-MM-ddTHH:mm");
+    }
+
+    private void OnTimestampChange(ChangeEventArgs e)
+    {
+        if (e.Value is not string s || string.IsNullOrWhiteSpace(s)) return;
+        if (!DateTime.TryParse(s, out var local)) return;
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Local);
+        _model.TimestampUtc = unspecified.ToUniversalTime();
+        _timestampLocal = s;
+    }
+
+    private async Task OnCustomerChangedAsync()
+    {
+        _model.OpportunityIdString = "";
+        await RefreshOpportunitiesAsync();
+    }
+
+    private async Task RefreshOpportunitiesAsync()
+    {
+        if (!Guid.TryParse(_model.CustomerIdString, out var cid))
+        {
+            _opportunitiesForCustomer = new();
+            return;
+        }
+
+        _opportunitiesForCustomer = await Db.Opportunities.AsNoTracking()
+            .Where(o => o.CustomerId == cid)
+            .OrderByDescending(o => o.UpdatedAt)
+            .Select(o => new OppOption(o.OpportunityId, o.Title))
+            .ToListAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_userId.HasValue)
+            return;
+        if (!Guid.TryParse(_model.CustomerIdString, out var customerId))
+            return;
+
+        Guid? opp = string.IsNullOrEmpty(_model.OpportunityIdString)
+            ? null
+            : Guid.Parse(_model.OpportunityIdString);
+
+        var ts = _model.TimestampUtc;
+
+        if (_isCreate)
+        {
+            var i = new Interaction
+            {
+                InteractionId = Guid.NewGuid(),
+                CustomerId = customerId,
+                OpportunityId = opp,
+                UserId = _userId.Value,
+                Type = _model.Type,
+                Subject = _model.Subject.Trim(),
+                Details = _model.Details.Trim(),
+                Timestamp = ts,
+            };
+            Db.Interactions.Add(i);
+            await Db.SaveChangesAsync();
+            Nav.NavigateTo("/interactions");
+            return;
+        }
+
+        if (_entity is null) return;
+        _entity.CustomerId = customerId;
+        _entity.OpportunityId = opp;
+        _entity.Type = _model.Type;
+        _entity.Subject = _model.Subject.Trim();
+        _entity.Details = _model.Details.Trim();
+        _entity.Timestamp = ts;
+        await Db.SaveChangesAsync();
+        Nav.NavigateTo("/interactions");
+    }
+
+    private sealed record CustomerOption(Guid CustomerId, string Label);
+    private sealed record OppOption(Guid OpportunityId, string Title);
+
+    private sealed class IntForm
+    {
+        public string CustomerIdString { get; set; } = "";
+        public string OpportunityIdString { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Type { get; set; } = "Call";
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string Subject { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.StringLength(4000)]
+        public string Details { get; set; } = "";
+        public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    }
+}

@@ -1,0 +1,86 @@
+@page "/tickets"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+
+<PageTitle>Support tickets</PageTitle>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <h1 class="mb-0 me-auto">Support tickets</h1>
+    <a class="btn btn-primary" href="tickets/create">New ticket</a>
+</div>
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+            <tr>
+                <th>Subject</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Agent</th>
+                <th>Updated</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in _rows)
+            {
+                <tr>
+                    <td>@row.Subject</td>
+                    <td><a href="customers/@row.CustomerId">@row.CustomerName</a></td>
+                    <td>@row.Status</td>
+                    <td>@row.Priority</td>
+                    <td>@row.AgentName</td>
+                    <td>@row.UpdatedAt.ToLocalTime():g</td>
+                    <td><a href="tickets/@row.TicketId">Open</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private List<TicketRow> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _rows = await (
+                from t in Db.SupportTickets.AsNoTracking()
+                join c in Db.Customers.AsNoTracking() on t.CustomerId equals c.CustomerId
+                join u in Db.Users.AsNoTracking() on t.AssignedAgentId equals u.UserId into uj
+                from u in uj.DefaultIfEmpty()
+                orderby t.UpdatedAt descending
+                select new TicketRow(
+                    t.TicketId,
+                    t.CustomerId,
+                    c.CompanyName != "" ? c.CompanyName : c.FirstName + " " + c.LastName,
+                    t.Subject,
+                    t.Status,
+                    t.Priority,
+                    u != null ? u.Name : "—",
+                    t.UpdatedAt))
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private sealed record TicketRow(
+        Guid TicketId,
+        Guid CustomerId,
+        string CustomerName,
+        string Subject,
+        string Status,
+        string Priority,
+        string AgentName,
+        DateTime UpdatedAt);
+}

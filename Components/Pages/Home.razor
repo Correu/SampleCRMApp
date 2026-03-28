@@ -1,0 +1,60 @@
+@page "/"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 text-muted">Customers</h2>
+                <p class="display-6 mb-0">@_customerCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 text-muted">Open opportunities</h2>
+                <p class="display-6 mb-0">@_openOpportunities</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 text-muted">Open tickets</h2>
+                <p class="display-6 mb-0">@_openTickets</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 text-muted">Interactions (30d)</h2>
+                <p class="display-6 mb-0">@_recentInteractions</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<p class="text-muted">Use the sidebar to manage customers, opportunities, interactions, and support.</p>
+
+@code {
+    private int _customerCount;
+    private int _openOpportunities;
+    private int _openTickets;
+    private int _recentInteractions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var since = DateTime.UtcNow.AddDays(-30);
+        _customerCount = await Db.Customers.CountAsync();
+        _openOpportunities = await Db.Opportunities.CountAsync(o => o.Status != "Won" && o.Status != "Lost");
+        _openTickets = await Db.SupportTickets.CountAsync(t => t.ClosedAt == null && t.Status != "Closed");
+        _recentInteractions = await Db.Interactions.CountAsync(i => i.Timestamp >= since);
+    }
+}

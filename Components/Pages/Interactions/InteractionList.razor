@@ -1,0 +1,132 @@
+@page "/interactions"
+@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+
+<PageTitle>Interactions</PageTitle>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <h1 class="mb-0 me-auto">Interactions</h1>
+    <a class="btn btn-primary" href="@CreateHref">Log interaction</a>
+</div>
+
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-end">
+    <div>
+        <label class="form-label mb-0">Customer</label>
+        <select class="form-select" style="min-width:14rem" @bind="_filterCustomerId" @bind:after="LoadAsync">
+            <option value="">All customers</option>
+            @foreach (var c in _customers)
+            {
+                <option value="@c.CustomerId">@c.Label</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+            <tr>
+                <th>When</th>
+                <th>Type</th>
+                <th>Subject</th>
+                <th>Customer</th>
+                <th>Opportunity</th>
+                <th>User</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in _rows)
+            {
+                <tr>
+                    <td>@row.Timestamp.ToLocalTime():g</td>
+                    <td>@row.Type</td>
+                    <td>@row.Subject</td>
+                    <td><a href="customers/@row.CustomerId">@row.CustomerName</a></td>
+                    <td>@(row.OpportunityTitle ?? "—")</td>
+                    <td>@row.UserName</td>
+                    <td><a href="interactions/@row.InteractionId/edit">Edit</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "customerId")]
+    public Guid? CustomerIdQuery { get; set; }
+
+    private bool _loading = true;
+    private string _filterCustomerId = "";
+    private List<CustomerOption> _customers = new();
+    private List<IntRow> _rows = new();
+
+    private string CreateHref =>
+        string.IsNullOrEmpty(_filterCustomerId)
+            ? "interactions/create"
+            : $"interactions/create?customerId={_filterCustomerId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (CustomerIdQuery.HasValue && CustomerIdQuery.Value != Guid.Empty)
+            _filterCustomerId = CustomerIdQuery.Value.ToString();
+
+        _customers = await Db.Customers.AsNoTracking()
+            .OrderBy(c => c.CompanyName).ThenBy(c => c.LastName)
+            .Select(c => new CustomerOption(c.CustomerId, c.CompanyName != "" ? c.CompanyName : c.FirstName + " " + c.LastName))
+            .ToListAsync();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        Guid? filter = string.IsNullOrEmpty(_filterCustomerId) ? null : Guid.Parse(_filterCustomerId);
+
+        var q =
+            from i in Db.Interactions.AsNoTracking()
+            join c in Db.Customers.AsNoTracking() on i.CustomerId equals c.CustomerId
+            join u in Db.Users.AsNoTracking() on i.UserId equals u.UserId
+            join o in Db.Opportunities.AsNoTracking() on i.OpportunityId equals o.OpportunityId into oj
+            from o in oj.DefaultIfEmpty()
+            select new { i, c, u, o };
+
+        if (filter is Guid cid)
+            q = q.Where(x => x.i.CustomerId == cid);
+
+        _rows = await q
+            .OrderByDescending(x => x.i.Timestamp)
+            .Select(x => new IntRow(
+                x.i.InteractionId,
+                x.i.CustomerId,
+                x.c.CompanyName != "" ? x.c.CompanyName : x.c.FirstName + " " + x.c.LastName,
+                x.i.Type,
+                x.i.Subject,
+                x.i.Timestamp,
+                x.o != null ? x.o.Title : null,
+                x.u.Name))
+            .Take(500)
+            .ToListAsync();
+
+        _loading = false;
+    }
+
+    private sealed record CustomerOption(Guid CustomerId, string Label);
+    private sealed record IntRow(
+        Guid InteractionId,
+        Guid CustomerId,
+        string CustomerName,
+        string Type,
+        string Subject,
+        DateTime Timestamp,
+        string? OpportunityTitle,
+        string UserName);
+}

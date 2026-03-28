@@ -1,0 +1,68 @@
+## Build outputs
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+out/
+artifacts/
+
+## Publish / pack
+publish/
+*.nupkg
+*.snupkg
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+
+## User-specific (VS / Rider / VS Code)
+*.user
+*.userosscache
+*.rsuser
+*.suo
+*.sln.docstates
+.vs/
+.idea/
+*.DotSettings.user
+*.sln.iml
+
+## Test & coverage
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+*.opencover.xml
+
+## NuGet
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+
+## ASP.NET / Blazor
+wwwroot/lib/
+ScaffoldingReadMe.txt
+*.pubxml
+*.publishproj
+*.azurePubxml
+*.pubxml.user
+**/Properties/PublishProfiles/*.user
+
+## Secrets & local config (uncomment if you use these patterns)
+# appsettings.*.local.json
+# *.Development.local.json
+# secrets.json
+
+## OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+## Misc
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
