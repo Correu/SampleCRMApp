@@ -27,7 +27,27 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Password</label>
-                        <InputText type="password" class="form-control" @bind-Value="_create.Password" />
+                        <div class="position-relative">
+                            <InputText type="@(_showCreatePassword ? "text" : "password")" class="form-control pe-5" @bind-Value="_create.Password" />
+                            <button class="btn position-absolute top-50 end-0 translate-middle-y me-2 p-0 border-0 bg-transparent text-secondary z-1"
+                                    type="button"
+                                    @onclick="ToggleCreatePasswordVisibility"
+                                    aria-label="@(_showCreatePassword ? "Hide password" : "Show password")">
+                                @if (_showCreatePassword)
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                        <path d="M13.359 11.238 15 12.879l-.708.707-2.122-2.122A8.72 8.72 0 0 1 8 12.5c-5 0-7.777-4.5-7.777-4.5a13.13 13.13 0 0 1 3.099-3.54L1 2.137l.707-.707 12.652 12.652-.707.707-1.293-1.293ZM5.88 6.587A2.5 2.5 0 0 0 9.413 10.12L5.88 6.587Zm5.046 2.217a2.5 2.5 0 0 0-3.73-3.73l3.73 3.73Zm2.051.03c.51-.592.862-1.183 1.023-1.504 0 0-2.777-4.5-7.777-4.5-.84 0-1.614.121-2.317.32l1.245 1.244A3.5 3.5 0 0 1 10.6 8.85l2.377 2.377Z"/>
+                                    </svg>
+                                }
+                                else
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                        <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.132 13.132 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.12 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.173 8Z"/>
+                                        <path d="M8 5.5A2.5 2.5 0 1 0 8 10.5 2.5 2.5 0 0 0 8 5.5Zm0 1A1.5 1.5 0 1 1 8 9.5 1.5 1.5 0 0 1 8 6.5Z"/>
+                                    </svg>
+                                }
+                            </button>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Role</label>
@@ -81,6 +101,7 @@
     private List<User> _users = new();
     private CreateModel _create = new();
     private string? _createMessage;
+    private bool _showCreatePassword;
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
@@ -115,6 +136,11 @@
         _create = new CreateModel { Role = AppRoles.Agent };
         _createMessage = "User created.";
         await ReloadAsync();
+    }
+
+    private void ToggleCreatePasswordVisibility()
+    {
+        _showCreatePassword = !_showCreatePassword;
     }
 
     private sealed class CreateModel

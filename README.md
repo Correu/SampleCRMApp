@@ -7,6 +7,7 @@ A small **customer relationship management (CRM)** web application built with **
 ## Features
 
 - **Authentication** — Cookie-based sign-in backed by the `Users` table (passwords stored as PBKDF2 hashes via `PasswordHasher`).
+- **Password visibility** — On **Sign in** and on **Admin → Users** when creating a user, the password field includes an in-field eye icon to show or hide what you type. Toggle uses Blazor interactive server and inline SVG (no separate icon font required).
 - **Roles** — `Admin` and `Agent` (`AppRoles`). Admins see **Users** in the nav and can assign support tickets to agents on ticket detail; agents see a read-only note for assignment.
 - **Dashboard** — High-level counts (customers, open opportunities, open tickets, recent interactions).
 - **CRM areas** — Customers (CRUD + detail with related counts), Opportunities (CRUD, customer + optional assigned rep), Interactions (log and filter by customer), Support tickets (create, list, detail with status updates and responses).
@@ -72,6 +73,8 @@ On first run, the app applies EF Core **migrations** and seeds a default admin i
 | **Email**    | `admin@samplecrm.local` |
 | **Password** | `Admin123!`             |
 
+Click the **eye** inside the password box to reveal or mask the password. The same control appears when an admin sets a new user’s password on **Admin → Users**.
+
 Use **Admin → Users** (admin only) to create more accounts (`Admin` or `Agent`).
 
 ---
@@ -81,6 +84,7 @@ Use **Admin → Users** (admin only) to create more accounts (`Admin` or `Agent`
 - **Connection string:** `ConnectionStrings:DefaultConnection` in [appsettings.json](appsettings.json) and [appsettings.Development.json](appsettings.Development.json).
 - **Cookie name / session:** Configured in [Program.cs](Program.cs) (`SampleCRM.Auth`, sliding 8-hour expiration).
 - **Authorization:** A fallback policy requires an authenticated user; [Login](Components/Pages/Account/Login.razor) and [Error](Components/Pages/Error.razor) allow anonymous access.
+- **Sign-in page render mode:** [Login.razor](Components/Pages/Account/Login.razor) uses `@rendermode InteractiveServer` so the password show/hide control can run Blazor events while the form still posts to [AccountController](Controllers/AccountController.cs) for authentication.
 
 For secrets in real deployments, prefer **User Secrets**, **environment variables**, or a secret store—not committed JSON files.
 
